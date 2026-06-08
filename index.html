@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Call History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-grid: #14141c;
+    --surface: #15151d;
+    --surface-2: #1c1c26;
+    --border: #26262f;
+    --text: #e7e7ea;
+    --text-muted: #6b6b78;
+    --text-dim: #8b8b96;
+    --primary: #8b5cf6;
+    --primary-soft: rgba(139, 92, 246, 0.12);
+    --primary-border: rgba(139, 92, 246, 0.35);
+    --success: #22c55e;
+    --success-soft: rgba(34, 197, 94, 0.15);
+  }
+
+  * { box-sizing: border-box; font-family: "Inter", sans-serif !important; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Inter", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  .app {
+    display: grid;
+    grid-template-rows: 64px 1fr 56px;
+    height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn {
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.12s;
+  }
+  .back-btn:hover { color: var(--text); }
+  .user-menu { position: relative; }
+  .user-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #4f46c4;
+    display: grid; place-items: center;
+    color: #fff; font-size: 12px; font-weight: 600;
+    overflow: hidden;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+  }
+  .user-dropdown {
+    position: absolute; top: calc(100% + 10px); right: 0;
+    background: #14141d;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-width: 240px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    z-index: 60;
+    display: none;
+    overflow: hidden;
+  }
+  .user-menu.open .user-dropdown { display: block; }
+  .user-dropdown-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+  }
+  .user-dropdown-header .avatar-lg {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #4f46c4;
+    display: grid; place-items: center;
+    color: #fff; font-size: 13px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .user-dropdown-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .user-dropdown-divider { border-top: 1px solid var(--border); }
+  .user-dropdown-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    color: var(--text); font-size: 13px;
+    background: transparent; border: none; width: 100%;
+    cursor: pointer; text-align: left;
+  }
+  .user-dropdown-item:hover { background: rgba(255,255,255,0.04); }
+  .user-dropdown-item svg { width: 18px; height: 18px; color: var(--text-dim); }
+  .user-dropdown-version {
+    padding: 10px 16px;
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  /* Body: table + drawer */
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 850px;
+    gap: 16px;
+    padding: 16px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 1px 1px, #1f1f29 1px, transparent 0) 0 0 / 16px 16px,
+      var(--bg);
+  }
+  .body.drawer-closed { grid-template-columns: 1fr; }
+  .body.drawer-closed .drawer { display: none; }
+
+  /* Card shell shared by both panels */
+  .card {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: #16161e;
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+  .panel-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .table-wrap {
+    overflow: auto;
+    flex: 1;
+    background: var(--surface);
+  }
+
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead th {
+    text-align: left;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); font-weight: 600;
+    padding: 12px 20px;
+    background: #1a1a23;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 1;
+  }
+  thead th:nth-child(1) { width: 60px; }
+  thead th:nth-child(2) { width: 13%; }
+  thead th:nth-child(3) { width: 11%; }
+  thead th:nth-child(4) { width: 11%; }
+  thead th:nth-child(5) { width: 24%; }
+  thead th:nth-child(6) { width: 14%; }
+  thead th:nth-child(7) { width: auto; }
+  .col-num { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  tbody td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    font-size: 13px;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; transition: background 0.12s; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody tr.selected {
+    background: var(--primary-soft);
+  }
+
+  .date-primary { font-weight: 600; color: var(--text); }
+  .date-secondary { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .session-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .duration { font-variant-numeric: tabular-nums; color: var(--text); }
+
+  .participants-cell { display: flex; align-items: center; gap: 10px; }
+  .participants-icon {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #4f46c4;
+    display: grid; place-items: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .p-count-num { font-size: 14px; color: var(--text); font-weight: 500; }
+  .p-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #4f46c4;
+    display: grid; place-items: center;
+    color: #fff; font-size: 11px; font-weight: 600;
+    box-sizing: border-box;
+  }
+
+  /* Drawer */
+  .drawer { overflow: hidden; }
+  .close-btn {
+    width: 28px; height: 28px;
+    background: transparent; border: none; border-radius: 6px;
+    color: var(--text-dim); cursor: pointer; font-size: 16px;
+    display: grid; place-items: center;
+  }
+  .close-btn:hover { background: var(--surface-2); color: var(--text); }
+
+  .drawer-content { padding: 24px; overflow-y: auto; flex: 1; }
+
+  .section-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); font-weight: 500;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label svg { width: 14px; height: 14px; }
+  .section { padding-bottom: 24px; margin-left: -24px; margin-right: -24px; padding-left: 24px; padding-right: 24px; border-bottom: 1px solid var(--border); }
+  .section + .section { margin-top: 24px; }
+  .section:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .field-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .field {
+    background: #1a1a23;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .field-icon {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .field-icon svg { width: 22px; height: 22px; }
+  .field-body { display: flex; flex-direction: column; min-width: 0; }
+  .field-label {
+    font-size: 13px; color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .field-value {
+    font-size: 14px; color: var(--text); font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px;
+    background: var(--success-soft);
+    border-radius: 12px;
+    font-size: 12px; color: var(--success); font-weight: 500;
+  }
+  .status-chip::before {
+    content: ""; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--success);
+  }
+
+  .session-id-box {
+    background: #1a1a23;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px 12px 16px;
+    font-family: "Inter", sans-serif;
+    font-size: 13px; color: var(--text);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .session-id-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy-btn {
+    width: 30px; height: 30px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: all 0.12s;
+  }
+  .copy-btn:hover { color: var(--text); border-color: #3a3a48; background: rgba(255,255,255,0.04); }
+  .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+  .participants-card {
+    background: #1a1a23;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .participant-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+  }
+  .participant-row + .participant-row { border-top: 1px solid var(--border); }
+  .participant-row .p-avatar { width: 36px; height: 36px; font-size: 13px; border: none; }
+  .participant-info { flex: 1; }
+  .participant-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .participant-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; font-family: "Inter", sans-serif; }
+  .participant-time { color: var(--text-dim); font-size: 12px; }
+
+  .empty-text { color: var(--text-muted); font-size: 13px; }
+
+  /* Transcription */
+  .transcriptions-card {
+    background: #1a1a23;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .transcription-row {
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .transcription-row + .transcription-row,
+  .transcription-item + .transcription-item .transcription-row { border-top: 1px solid var(--border); }
+  .transcription-icon {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .transcription-icon svg { width: 22px; height: 22px; }
+  .transcription-info { flex: 1; min-width: 0; }
+  .transcription-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .transcription-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* Split button */
+  .split-btn { display: inline-flex; position: relative; }
+  .split-btn-main {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 34px; padding: 0 12px;
+    background: var(--primary); color: #fff;
+    border: none;
+    border-top-left-radius: 8px; border-bottom-left-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .split-btn-main:hover { background: #7c3aed; }
+  .split-btn-arrow {
+    width: 30px; height: 34px;
+    background: var(--primary); color: #fff;
+    border: none; border-left: 1px solid rgba(255,255,255,0.18);
+    border-top-right-radius: 8px; border-bottom-right-radius: 8px;
+    cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .split-btn-arrow:hover { background: #7c3aed; }
+  .split-dropdown {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    background: #1f1f29; border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 150px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+    z-index: 50;
+    display: none;
+    overflow: hidden;
+  }
+  .split-btn.open .split-dropdown { display: block; }
+  .split-dropdown button {
+    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    background: transparent; border: none;
+    color: var(--text); font-size: 13px; cursor: pointer;
+    text-align: left;
+  }
+  .split-dropdown button:hover { background: rgba(255,255,255,0.05); }
+
+  .summary-btn {
+    height: 34px; padding: 0 14px;
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .summary-btn:hover { background: rgba(255,255,255,0.05); border-color: #3a3a48; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%; max-width: 560px;
+    max-height: 80vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 14px;
+    padding: 20px 22px 16px;
+    border-bottom: 1px solid var(--border);
+    background: #16161e;
+  }
+  .modal-header-info { flex: 1; min-width: 0; }
+  .modal-title { font-size: 16px; font-weight: 600; color: var(--text); margin: 0 0 4px; word-break: break-word; }
+  .modal-subtitle { font-size: 12px; color: var(--text-dim); }
+  .modal-close {
+    width: 30px; height: 30px;
+    background: transparent; border: none; border-radius: 6px;
+    color: var(--text-dim); cursor: pointer; font-size: 16px;
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .modal-body {
+    padding: 20px 22px;
+    overflow-y: auto;
+    font-size: 13px; color: var(--text); line-height: 1.65;
+  }
+  .modal-section-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  /* Footer / pagination */
+  .footer {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .page-btn {
+    width: 28px; height: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .page-btn:hover:not(:disabled) { color: var(--text); border-color: #3a3a48; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .page-info { color: var(--text-dim); font-size: 13px; }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #26262f; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a48; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <button class="back-btn" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5"/>
+          <path d="M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h1>Call History</h1>
+    </div>
+    <div class="user-menu" id="userMenu">
+      <button class="user-avatar" id="userAvatar" aria-label="User menu">PB</button>
+      <div class="user-dropdown">
+        <div class="user-dropdown-header">
+          <div class="avatar-lg">PB</div>
+          <div class="user-dropdown-name">Pradeep Bhandari</div>
+        </div>
+        <div class="user-dropdown-divider"></div>
+        <button class="user-dropdown-item">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5h6c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h6c.55 0 1-.45 1-1s-.45-1-1-1H5V5zm14.65 6.65l-2.79-2.79a.5.5 0 00-.86.35V10h-7c-.55 0-1 .45-1 1s.45 1 1 1h7v1.79a.5.5 0 00.85.35l2.79-2.79a.5.5 0 00.01-.7z"/></svg>
+          Logout
+        </button>
+        <div class="user-dropdown-divider"></div>
+        <div class="user-dropdown-version">V.5.0.1</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <div class="body" id="body">
+
+    <!-- Table -->
+    <section class="card table-panel">
+      <div class="panel-header">
+        <h2>Call List</h2>
+      </div>
+      <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Date</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Session ID</th>
+            <th>Duration</th>
+            <th>Participants</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- Drawer -->
+    <aside class="card drawer">
+      <div class="panel-header">
+        <h2>Call Details</h2>
+        <button class="close-btn" id="closeDrawer">✕</button>
+      </div>
+
+      <div class="drawer-content">
+
+        <div class="section">
+          <div class="section-label">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm10 0a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2h-4a2 2 0 01-2-2V5zM3 15a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4zm10 0a2 2 0 012-2h4a2 2 0 012 2v4a2 2 0 01-2 2h-4a2 2 0 01-2-2v-4z"/></svg>
+            Overview
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <div class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.41 14.59L6.7 12.7a.996.996 0 010-1.41c.39-.39 1.02-.39 1.41 0L11 14.17l5.88-5.88a.996.996 0 111.41 1.41l-6.59 6.59c-.39.39-1.03.39-1.42 0z"/></svg>
+              </div>
+              <div class="field-body">
+                <div class="field-label">Status</div>
+                <div class="field-value"><span class="status-chip" id="d-status">ended</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 14.2L11 13.4V7c0-.55.45-1 1-1s1 .45 1 1v5.6l3.5 2.1c.47.28.61.89.33 1.36-.28.46-.89.61-1.33.33z"/></svg>
+              </div>
+              <div class="field-body">
+                <div class="field-label">Duration</div>
+                <div class="field-value" id="d-duration">00:02:50</div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18a1 1 0 000-1.69L9.54 5.97c-.67-.42-1.54.05-1.54.85z"/></svg>
+              </div>
+              <div class="field-body">
+                <div class="field-label">Started</div>
+                <div class="field-value" id="d-started">Jun 8, 2026 04:07 PM</div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"/></svg>
+              </div>
+              <div class="field-body">
+                <div class="field-label">Ended</div>
+                <div class="field-value" id="d-ended">Jun 8, 2026 04:09 PM</div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 7c0-.55.45-1 1-1h14c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1zm0 5c0-.55.45-1 1-1h14c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1zm0 5c0-.55.45-1 1-1h14c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1z"/></svg>
+              </div>
+              <div class="field-body">
+                <div class="field-label">Mode</div>
+                <div class="field-value" id="d-mode">meet</div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-icon" id="d-type-icon"></div>
+              <div class="field-body">
+                <div class="field-label">Type</div>
+                <div class="field-value" id="d-type">video</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 10h-8.35A5.99 5.99 0 007 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 005.65-4H13l1.29 1.29c.39.39 1.03.39 1.42 0L17 14l1.29 1.29c.39.39 1.04.39 1.42-.01l3.01-3.04a.996.996 0 00-.01-1.42c-.39-.39-.93-.82-1.71-.82zM7 15a3 3 0 110-6 3 3 0 010 6z"/></svg>
+            Session ID
+          </div>
+          <div class="session-id-box">
+            <span class="session-id-value" id="d-session">test</span>
+            <button class="copy-btn" id="copySession" aria-label="Copy session ID">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v13c0 .55.45 1 1 1s1-.45 1-1V4c0-.55.45-1 1-1h11c.55 0 1-.45 1-1s-.45-1-1-1zm3.7 4.29l-3.99-3.99A.997.997 0 0015 1H8c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-.27-.11-.52-.3-.71zM19 20H9c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1h6v4c0 .55.45 1 1 1h4v11c0 .55-.45 1-1 1z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 12c2.21 0 4-1.79 4-4S11.21 4 9 4 5 5.79 5 8s1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v1c0 .55.45 1 1 1h14c.55 0 1-.45 1-1v-1c0-2.66-5.33-4-8-4zm7.76-9.64l-1.68 1.69c.84 1.18.84 2.71 0 3.89l1.68 1.69c2.02-2.02 2.02-5.07 0-7.27zM20.07 2l-1.63 1.63c2.77 3.02 2.77 7.56 0 10.74L20.07 16c3.9-3.89 3.91-9.95 0-14z"/></svg>
+            <span id="d-participants-label">Participants (1)</span>
+          </div>
+          <div id="d-participants"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/></svg>
+            Recordings
+          </div>
+          <div id="d-recordings" class="empty-text">No recordings for this session</div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM5 14c-.55 0-1-.45-1-1s.45-1 1-1h3c.55 0 1 .45 1 1s-.45 1-1 1H5zm9 4H5c-.55 0-1-.45-1-1s.45-1 1-1h9c.55 0 1 .45 1 1s-.45 1-1 1zm5 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4h-7c-.55 0-1-.45-1-1s.45-1 1-1h7c.55 0 1 .45 1 1s-.45 1-1 1z"/></svg>
+            Transcription
+          </div>
+          <div id="d-transcriptions"></div>
+        </div>
+
+      </div>
+    </aside>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button class="page-btn" disabled>‹</button>
+    <span class="page-info">Page 1 of 1</span>
+    <button class="page-btn" disabled>›</button>
+  </footer>
+
+</div>
+<!-- Summary Modal -->
+<div class="modal-backdrop" id="summaryModal">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <h3 class="modal-title" id="modalTitle">Transcription</h3>
+        <div class="modal-subtitle" id="modalSubtitle">English (US) · 5m 38s</div>
+      </div>
+      <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section-label">Summary</div>
+      <div id="modalSummary"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const calls = [
+    {
+      date: 'Jun 8, 2026', time: '04:07 PM', endTime: '04:09 PM',
+      sessionId: 'test', duration: '00:02:50',
+      status: 'ended', mode: 'meet', type: 'video',
+      started: 'Jun 8, 2026 04:07 PM', ended: 'Jun 8, 2026 04:09 PM',
+      participants: [
+        { name: 'Pradeep Bhandari', uid: 'vrgfcklpjctpl9jttlf8bhqebgg3', status: 'ended', time: '3 min', initial: 'P' }
+      ],
+      recordings: [],
+      transcriptions: [
+        {
+          title: 'transcript_jun8_0407pm.txt', meta: 'English (US) · 2m 50s',
+          text: [
+            '[00:00:02] Pradeep: Hey, can you hear me okay?',
+            '[00:00:04] Agent: Yes, audio is clear on my end. How is mine?',
+            '[00:00:07] Pradeep: All good. Thanks for jumping on a quick call.',
+            '[00:00:11] Agent: Of course. You wanted to walk me through the new dashboard?',
+            '[00:00:15] Pradeep: Yes, sharing my screen now. Let me know once you see it.',
+            '[00:00:21] Agent: Got it. The metrics panel on the left looks much cleaner than the last build.',
+            '[00:00:27] Pradeep: Right, we removed the duplicate filter and merged the date controls.',
+            '[00:00:34] Agent: One small thing — the export button is hidden until I scroll. Can we float it?',
+            '[00:00:41] Pradeep: Good catch. I will move it next to the search bar so it is always visible.',
+            '[00:00:48] Agent: Perfect. And the empty state copy — can we tone it down a little?',
+            '[00:00:54] Pradeep: Sure. I will rewrite it to a single line with a link to the docs.',
+            '[00:01:02] Agent: Sounds great. When can I see the next build?',
+            '[00:01:06] Pradeep: I will push it by tomorrow EOD and share a Loom.',
+            '[00:01:12] Agent: Works for me. Anything you need from my side?',
+            '[00:01:16] Pradeep: Just a quick approval on the empty state copy once I send it over.',
+            '[00:01:21] Agent: Will do. Thanks Pradeep, talk soon.',
+            '[00:01:24] Pradeep: Thanks, bye.'
+          ].join('\n'),
+          summary: 'Pradeep walked through the redesigned dashboard. The agent confirmed the cleaner metrics panel and flagged two changes: float the export button so it is visible without scrolling, and shorten the empty-state copy to one line with a docs link. Pradeep committed to a new build by tomorrow EOD with a Loom recap, and the agent will approve the new empty-state copy when shared.'
+        }
+      ]
+    },
+    {
+      date: 'Apr 16, 2026', time: '05:17 PM', endTime: '05:17 PM',
+      sessionId: '4756-8971-d6ee', duration: '00:00:30',
+      status: 'ended', mode: 'direct', type: 'audio',
+      started: 'Apr 16, 2026 05:17 PM', ended: 'Apr 16, 2026 05:17 PM',
+      participants: [
+        { name: 'Pradeep Bhandari', uid: 'vrgfcklpjctpl9jttlf8bhqebgg3', status: 'ended', time: '30 sec', initial: 'P' },
+        { name: 'Jordan Lee', uid: 'jordan_lee_uid_8821', status: 'ended', time: '28 sec', initial: 'J' }
+      ],
+      recordings: [],
+      transcriptions: []
+    },
+    {
+      date: 'Apr 15, 2026', time: '11:24 AM', endTime: '11:29 AM',
+      sessionId: '457a-8d7a-a1dd', duration: '00:05:38',
+      status: 'ended', mode: 'meet', type: 'video',
+      started: 'Apr 15, 2026 11:24 AM', ended: 'Apr 15, 2026 11:29 AM',
+      participants: [
+        { name: 'Pradeep Bhandari', uid: 'vrgfcklpjctpl9jttlf8bhqebgg3', status: 'ended', time: '5 min', initial: 'P' },
+        { name: 'Sara Lin', uid: 'sara_lin_uid_4421', status: 'ended', time: '5 min', initial: 'S' },
+        { name: 'Alex Kim', uid: 'alex_kim_uid_7132', status: 'ended', time: '4 min', initial: 'A' },
+        { name: 'Maya Patel', uid: 'maya_patel_uid_9912', status: 'ended', time: '5 min', initial: 'M' }
+      ],
+      recordings: [],
+      transcriptions: [
+        {
+          title: 'standup_apr15_1124am.txt', meta: 'English (US) · 5m 38s',
+          text: [
+            '[00:00:03] Pradeep: Morning everyone. Let us keep this tight, I have a 12 PM hard stop.',
+            '[00:00:08] Sara: Okay, I will go first. Yesterday I wrapped up the auth refactor and merged it after Alex reviewed.',
+            '[00:00:17] Sara: Today I am picking up the password reset flow and the new email template.',
+            '[00:00:23] Sara: No blockers, but I might need eyes on the email copy later.',
+            '[00:00:29] Alex: Cool. I finished the rate limiter changes and pushed a draft PR.',
+            '[00:00:36] Alex: I am blocked on the API spec from the infra team — we need confirmation on the new error codes.',
+            '[00:00:44] Pradeep: I will ping Rohit after standup and try to unblock you by lunch.',
+            '[00:00:50] Maya: From my side, I am almost done with the onboarding revamp. I will pair with Alex after this call so I can pick up the spec work in parallel.',
+            '[00:01:01] Maya: One risk — the design files for step three are still in review.',
+            '[00:01:07] Pradeep: Okay, I will follow up with design today. Anything else?',
+            '[00:01:11] Sara: Reminder that the prod deploy is moving to Thursday because of the QA freeze.',
+            '[00:01:17] Alex: Noted. I will make sure my PR is reviewed by Wednesday.',
+            '[00:01:22] Pradeep: Perfect. Demo at 4 PM tomorrow, please come with screenshots ready.',
+            '[00:01:28] Maya: Will do.',
+            '[00:01:30] Pradeep: Thanks everyone, talk later.'
+          ].join('\n'),
+          summary: 'Standup covered three updates: Sara merged the auth refactor and is picking up the password reset flow; Alex pushed a draft PR for the rate limiter but is blocked on the API spec from infra; Maya is wrapping up onboarding and will pair with Alex. Action items — Pradeep to unblock Alex via Rohit and follow up with design on step three. Prod deploy moved to Thursday; demo set for 4 PM tomorrow with screenshots required.'
+        },
+        {
+          title: 'demo_recap_apr15.txt', meta: 'English (US) · 1m 12s',
+          text: [
+            '[00:00:02] Pradeep: Quick recap on the demo we ran with Acme this morning.',
+            '[00:00:07] Pradeep: Overall the customer was happy with the new analytics view and the speed improvements.',
+            '[00:00:14] Pradeep: Two concrete asks came out of the call.',
+            '[00:00:18] Pradeep: First, they want a dark mode option — apparently their ops team works night shifts.',
+            '[00:00:24] Pradeep: Second, they want a CSV export from the reports page, ideally with a date range filter.',
+            '[00:00:32] Pradeep: I told them we will scope both this sprint and share a timeline by Friday.',
+            '[00:00:39] Pradeep: No other blockers, contract renewal still on track for next quarter.'
+          ].join('\n'),
+          summary: 'Acme demo went well — the customer liked the new analytics view and the performance gains. Two follow-ups: add a dark mode (ops team works nights) and add CSV export on the reports page with a date range filter. Both will be scoped this sprint and a timeline shared by Friday. Contract renewal is still on track for next quarter.'
+        }
+      ]
+    }
+  ];
+
+  const peopleIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
+
+  const body = document.getElementById('body');
+  const tbody = document.getElementById('tableBody');
+
+  function renderTable(selectedIdx) {
+    tbody.innerHTML = calls.map((c, i) => `
+      <tr data-idx="${i}" class="${i === selectedIdx ? 'selected' : ''}">
+        <td class="col-num">${i + 1}</td>
+        <td><div class="date-primary">${c.date}</div></td>
+        <td><div class="date-primary">${c.time}</div></td>
+        <td><div class="date-primary">${c.endTime}</div></td>
+        <td><span class="session-pill">${c.sessionId}</span></td>
+        <td class="duration">${c.duration}</td>
+        <td>
+          <div class="participants-cell">
+            <div class="participants-icon">${peopleIcon}</div>
+            <span class="p-count-num">${c.participants.length}</span>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.addEventListener('click', () => selectCall(parseInt(tr.dataset.idx, 10)));
+    });
+  }
+
+  function renderDrawer(c) {
+    document.getElementById('d-status').textContent = c.status;
+    document.getElementById('d-duration').textContent = c.duration;
+    document.getElementById('d-started').textContent = c.started;
+    document.getElementById('d-ended').textContent = c.ended;
+    document.getElementById('d-mode').textContent = c.mode;
+    document.getElementById('d-type').textContent = c.type;
+    document.getElementById('d-type-icon').innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>';
+    document.getElementById('d-session').textContent = c.sessionId;
+    document.getElementById('d-participants-label').textContent = `Participants (${c.participants.length})`;
+    const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+    document.getElementById('d-participants').innerHTML = `
+      <div class="participants-card">
+        ${c.participants.map(p => `
+          <div class="participant-row">
+            <div class="p-avatar">${initials(p.name)}</div>
+            <div class="participant-info">
+              <div class="participant-name">${p.name}</div>
+              <div class="participant-meta">${p.uid} · ${p.status}</div>
+            </div>
+            <div class="participant-time">${p.time}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    const tr = document.getElementById('d-transcriptions');
+    if (!c.transcriptions || c.transcriptions.length === 0) {
+      tr.className = 'empty-text';
+      tr.textContent = 'No transcriptions for this session';
+    } else {
+      tr.className = '';
+      const stripExt = (s) => s.replace(/\.[^.]+$/, '');
+      tr.innerHTML = `<div class="transcriptions-card">` + c.transcriptions.map((t, i) => `
+        <div class="transcription-item">
+          <div class="transcription-row">
+            <div class="transcription-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM5 14c-.55 0-1-.45-1-1s.45-1 1-1h3c.55 0 1 .45 1 1s-.45 1-1 1H5zm9 4H5c-.55 0-1-.45-1-1s.45-1 1-1h9c.55 0 1 .45 1 1s-.45 1-1 1zm5 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4h-7c-.55 0-1-.45-1-1s.45-1 1-1h7c.55 0 1 .45 1 1s-.45 1-1 1z"/></svg>
+            </div>
+            <div class="transcription-info">
+              <div class="transcription-title">${stripExt(t.title)}</div>
+              <div class="transcription-meta">${t.meta}</div>
+            </div>
+            <button class="summary-btn" data-summary="${i}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6c0-.55.45-1 1-1h14c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1zm0 6c0-.55.45-1 1-1h10c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1zm0 6c0-.55.45-1 1-1h14c.55 0 1 .45 1 1s-.45 1-1 1H5c-.55 0-1-.45-1-1z"/></svg>
+              Summary
+            </button>
+            <div class="split-btn" data-tr="${i}">
+              <button class="split-btn-main" data-format="text">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a1 1 0 011 1v8.59l2.3-2.3a1 1 0 011.4 1.42l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 011.4-1.42l2.3 2.3V4a1 1 0 011-1zM5 19a1 1 0 011-1h12a1 1 0 110 2H6a1 1 0 01-1-1z"/></svg>
+                Download
+              </button>
+              <button class="split-btn-arrow" aria-label="More formats">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div class="split-dropdown">
+                <button data-format="text">Text (.txt)</button>
+                <button data-format="json">JSON (.json)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('') + `</div>`;
+
+      tr.querySelectorAll('.split-btn').forEach(btn => {
+        const idx = parseInt(btn.dataset.tr, 10);
+        btn.querySelector('.split-btn-main').addEventListener('click', () => {
+          downloadTranscription(c.transcriptions[idx], 'text');
+        });
+        btn.querySelector('.split-btn-arrow').addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll('.split-btn.open').forEach(o => { if (o !== btn) o.classList.remove('open'); });
+          btn.classList.toggle('open');
+        });
+        btn.querySelectorAll('.split-dropdown button').forEach(opt => {
+          opt.addEventListener('click', () => {
+            downloadTranscription(c.transcriptions[idx], opt.dataset.format);
+            btn.classList.remove('open');
+          });
+        });
+      });
+      tr.querySelectorAll('.summary-btn').forEach(b => {
+        b.addEventListener('click', () => {
+          const idx = parseInt(b.dataset.summary, 10);
+          openSummaryModal(c.transcriptions[idx]);
+        });
+      });
+    }
+
+    const rec = document.getElementById('d-recordings');
+    if (c.recordings.length === 0) {
+      rec.className = 'empty-text';
+      rec.textContent = 'No recordings for this session';
+    } else {
+      rec.className = '';
+      rec.innerHTML = c.recordings.map(r => `<div>${r}</div>`).join('');
+    }
+  }
+
+  let currentIdx = 0;
+  function selectCall(idx) {
+    currentIdx = idx;
+    renderTable(idx);
+    renderDrawer(calls[idx]);
+    body.classList.remove('drawer-closed');
+  }
+
+  document.getElementById('closeDrawer').addEventListener('click', () => {
+    body.classList.add('drawer-closed');
+  });
+
+  document.getElementById('copySession').addEventListener('click', (e) => {
+    const txt = document.getElementById('d-session').textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+      const btn = e.currentTarget;
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1200);
+    });
+  });
+
+  function downloadTranscription(t, format) {
+    let content, filename, mime;
+    if (format === 'json') {
+      content = JSON.stringify({ title: t.title, meta: t.meta, text: t.text }, null, 2);
+      filename = t.title.replace(/\.[^.]+$/, '') + '.json';
+      mime = 'application/json';
+    } else {
+      content = t.text;
+      filename = t.title.replace(/\.[^.]+$/, '') + '.txt';
+      mime = 'text/plain';
+    }
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.split-btn')) {
+      document.querySelectorAll('.split-btn.open').forEach(o => o.classList.remove('open'));
+    }
+    if (!e.target.closest('#userMenu')) {
+      document.getElementById('userMenu').classList.remove('open');
+    }
+  });
+
+  document.getElementById('userAvatar').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('userMenu').classList.toggle('open');
+  });
+
+  const summaryModal = document.getElementById('summaryModal');
+  function openSummaryModal(t) {
+    document.getElementById('modalTitle').textContent = t.title.replace(/\.[^.]+$/, '');
+    document.getElementById('modalSubtitle').textContent = t.meta;
+    document.getElementById('modalSummary').textContent = t.summary;
+    summaryModal.classList.add('show');
+  }
+  function closeSummaryModal() { summaryModal.classList.remove('show'); }
+  document.getElementById('modalClose').addEventListener('click', closeSummaryModal);
+  summaryModal.addEventListener('click', (e) => { if (e.target === summaryModal) closeSummaryModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSummaryModal(); });
+
+  selectCall(0);
+</script>
+</body>
+</html>
